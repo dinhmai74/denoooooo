@@ -1,21 +1,76 @@
-import graphql from "https://creatcodebuild.github.io/graphql-projects/deno-graphql-port/dist/graphql.js";
-import * as expressive from "https://raw.githubusercontent.com/NMathar/deno-express/master/mod.ts";
+import { Application } from "https://deno.land/x/oak/mod.ts";
+import { applyGraphQL, gql } from "https://deno.land/x/oak_graphql/mod.ts";
 
-// Construct a schema, using GraphQL schema language
-var schema = graphql.buildSchema(`
-  type Query {
-    hello: String
+const app = new Application();
+
+app.use(async (ctx, next) => {
+  await next();
+  const rt = ctx.response.headers.get("X-Response-Time");
+  console.log(`${ctx.request.method} ${ctx.request.url} - ${rt}`);
+});
+
+app.use(async (ctx, next) => {
+  const start = Date.now();
+  await next();
+  const ms = Date.now() - start;
+  ctx.response.headers.set("X-Response-Time", `${ms}ms`);
+});
+
+const types = gql`
+  type User {
+    firstName: String
+    lastName: String
   }
-`);
 
-// The root provides a resolver function for each API endpoint
-var root = {
-  hello: () => {
-    return "Hello world!";
+  input UserInput {
+    firstName: String
+    lastName: String
+  }
+
+  type ResolveType {
+    done: Boolean
+  }
+
+  type Query {
+    getUser(id: String): User
+  }
+
+  type Mutation {
+    setUser(input: UserInput!): ResolveType!
+  }
+`;
+
+const resolvers = {
+  Query: {
+    getUser: (parent: any, { id }: any, context: any, info: any) => {
+      console.log("id", id, context);
+      return {
+        firstName: "wooseok",
+        lastName: "lee",
+      };
+    },
+  },
+  Mutation: {
+    setUser: (
+      parent: any,
+      { firstName, lastName }: any,
+      context: any,
+      info: any
+    ) => {
+      console.log("input:", firstName, lastName);
+      return {
+        done: true,
+      };
+    },
   },
 };
 
-// Run the GraphQL query '{ hello }' and print out the response
-graphql.graphql(schema, "{ hello }", root).then((response: any) => {
-  console.log(response);
+const GraphQLService = applyGraphQL({
+  typeDefs: types,
+  resolvers: resolvers,
 });
+
+app.use(GraphQLService.routes(), GraphQLService.allowedMethods());
+
+console.log("Server start at http://localhost:4000/graphql");
+await app.listen({ port: 4000 });
