@@ -1,5 +1,16 @@
+import { MongoClient } from "https://deno.land/x/mongo@v0.7.0/mod.ts";
 import { Application } from "https://deno.land/x/oak/mod.ts";
-import { applyGraphQL, gql } from "https://deno.land/x/oak_graphql/mod.ts";
+import { applyGraphQL } from "https://deno.land/x/oak_graphql/mod.ts";
+import { types } from "./graphql-types/QueryAndMutation.types.ts";
+import { DI } from "./model/model.ts";
+import { userResolvers } from "./resolvers/User.resolvers.ts";
+
+const client = new MongoClient();
+client.connectWithUri("mongodb://localhost:27017");
+
+const db = client.database("bowie-deno");
+const users = db.collection("users");
+DI.users = users;
 
 const app = new Application();
 
@@ -16,61 +27,12 @@ app.use(async (ctx, next) => {
   ctx.response.headers.set("X-Response-Time", `${ms}ms`);
 });
 
-const types = gql`
-  type User {
-    firstName: String
-    lastName: String
-  }
-
-  input UserInput {
-    firstName: String
-    lastName: String
-  }
-
-  type ResolveType {
-    done: Boolean
-  }
-
-  type Query {
-    getUser(id: String): User
-  }
-
-  type Mutation {
-    setUser(input: UserInput!): ResolveType!
-  }
-`;
-
-const resolvers = {
-  Query: {
-    getUser: (parent: any, { id }: any, context: any, info: any) => {
-      console.log("id", id, context);
-      return {
-        firstName: "wooseok",
-        lastName: "lee",
-      };
-    },
-  },
-  Mutation: {
-    setUser: (
-      parent: any,
-      { firstName, lastName }: any,
-      context: any,
-      info: any
-    ) => {
-      console.log("input:", firstName, lastName);
-      return {
-        done: true,
-      };
-    },
-  },
-};
-
 const GraphQLService = applyGraphQL({
   typeDefs: types,
-  resolvers: resolvers,
+  resolvers: [userResolvers],
 });
 
 app.use(GraphQLService.routes(), GraphQLService.allowedMethods());
 
-console.log("Server start at http://localhost:4000/graphql");
-await app.listen({ port: 4000 });
+console.log("Server start at http://localhost:8080/graphql");
+await app.listen({ port: 8080 });
